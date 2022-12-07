@@ -1,0 +1,6 @@
+/target
+.direnv
+result*
+CAG_*
+*.log
+.secret
