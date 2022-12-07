@@ -19,8 +19,6 @@ const CAG_INPUT: &str = "CAG_INPUT";
 const EXTENSIONS: &[&str] = &["png", "jpg", "jpeg"];
 const MINIMUM_SIMILARITY: f32 = 70.0;
 
-pub trait PathLike: AsRef<Path> + std::fmt::Debug {}
-
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
@@ -106,10 +104,6 @@ fn real_main() -> anyhow::Result<()> {
 
     Ok(())
 }
-
-// fn get_filename<T: AsRef<Path>>(path: T) -> Option<String> {
-//     path.as_ref().file_name()?.to_str().map(|s| s.to_string())
-// }
 
 fn setup_logging() -> anyhow::Result<()> {
     let colors = fern::colors::ColoredLevelConfig::new()
