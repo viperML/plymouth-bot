@@ -19,15 +19,13 @@
       systems = [
         "aarch64-linux"
         "x86_64-linux"
-        "x86_64-darwin"
       ];
 
       flake.overlays.default = final: prev: let
         inherit (nixpkgs) lib;
-        variant = "stable";
+        variant = "beta";
         buildSystem = final.stdenv.buildPlatform.system;
-        targetConfig = final.stdenv.targetPlatform.config;
-        canBeStatic = lib.strings.hasSuffix "musl" targetConfig;
+        targetConfig = "${final.stdenv.targetPlatform.uname.processor}-unknown-linux-musl";
       in {
         _toolchain = with fenix.packages.${buildSystem};
           combine [
@@ -50,26 +48,26 @@
                 (inputs.nix-filter.lib.inDirectory "src")
                 "Cargo.toml"
                 "Cargo.lock"
-                "build.rs"
               ];
             };
             name = "plymouth-bot";
             cargoLock.lockFile = ./Cargo.lock;
-            target = targetConfig;
-            CARGO_BUILD_RUSTFLAGS =
-              if canBeStatic
-              then "-C target-feature=+crt-static"
-              else "";
+            # target = targetConfig;
+            # CARGO_BUILD_RUSTFLAGS = "-C target-feature=+crt-static";
           };
 
-        _toolchain_dev = fenix.packages.${buildSystem}.${variant}.withComponents [
-          "rustc"
-          "cargo"
-          "rust-src"
-          "clippy"
-          "rustfmt"
-          "rust-analyzer"
-        ];
+        _toolchain_dev = with fenix.packages.${buildSystem};
+          combine [
+            (fenix.packages.${buildSystem}.${variant}.withComponents [
+              "rustc"
+              "cargo"
+              "rust-src"
+              "clippy"
+              "rustfmt"
+              "rust-analyzer"
+            ])
+            targets.${targetConfig}.${variant}.rust-std
+          ];
       };
 
       perSystem = {
@@ -84,8 +82,13 @@
         };
 
         packages = {
-          default = pkgs.plymouth-bot;
-          static = pkgs.pkgsCross.aarch64-multiplatform-musl.plymouth-bot;
+          # default = pkgs.plymouth-bot;
+          # static = pkgs.pkgsCross.aarch64-multiplatform-musl.plymouth-bot;
+          # default = (pkgs.makeRustPlatform {
+          #   cargo = pkgs._toolchain;
+          #   rustc = pkgs._toolchain;
+          # }).buildRustPackage {
+          # };
         };
 
         devShells.default = with pkgs;

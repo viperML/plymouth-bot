@@ -77,7 +77,7 @@ fn real_main() -> anyhow::Result<()> {
             .file_name()
             .ok_or_else(|| anyhow!("Failed to get failname for {:?}", path))?;
 
-        info!("Processing {:?}", file_name);
+        info!("Processing {:?}", path);
 
         if saucer.short_remaining == 0 {
             warn!("Short limit reached, sleeping 30 seconds");
@@ -88,13 +88,13 @@ fn real_main() -> anyhow::Result<()> {
         match saucer.tag_image(path, MINIMUM_SIMILARITY) {
             Ok(id) => {
                 info!("Adding to favourites!");
-                dispatch(file_name, Some((&id, &danbooru_client)), args.dry)?;
+                dispatch(path, Some((&id, &danbooru_client)), args.dry)?;
             }
             Err(error) => {
                 if error.chain().any(|cause| {
                     matches!(cause.downcast_ref(), Some(saucenao::SauceError::NoMatch))
                 }) {
-                    dispatch(file_name, None, args.dry)?;
+                    dispatch(path, None, args.dry)?;
                 } else {
                     bail!(error);
                 };
@@ -141,7 +141,7 @@ fn setup_logging() -> anyhow::Result<()> {
 }
 
 fn dispatch<P: AsRef<Path>>(
-    file_name: P,
+    path: P,
     target: Option<(&DanbooruId, &DanbooruClient)>,
     dry: bool,
 ) -> anyhow::Result<()> {
@@ -149,14 +149,14 @@ fn dispatch<P: AsRef<Path>>(
         None => {
             if !dry {
                 info!("Nosaucing file");
-                organize_file(file_name, false)?;
+                organize_file(path, false)?;
             }
         }
         Some((id, client)) => {
             client.fav_post(id)?;
             if !dry {
                 info!("Saucing file");
-                organize_file(file_name, true)?;
+                organize_file(path, true)?;
             }
         }
     }
