@@ -24,7 +24,7 @@
 
       flake.overlays.default = final: prev: let
         inherit (nixpkgs) lib;
-        variant = "complete";
+        variant = "stable";
         buildSystem = final.stdenv.buildPlatform.system;
         targetConfig = final.stdenv.targetPlatform.config;
         canBeStatic = lib.strings.hasSuffix "musl" targetConfig;
