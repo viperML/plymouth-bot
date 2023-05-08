@@ -1,8 +1,11 @@
 use clap::Parser;
 use color_eyre::Result;
 use redacted_debug::RedactedDebug;
-use std::path::PathBuf;
-use tracing::trace;
+use std::{
+    collections::VecDeque,
+    path::{Path, PathBuf},
+};
+use tracing::{debug, trace};
 use tracing_subscriber::prelude::*;
 
 #[derive(RedactedDebug, Clone, Parser)]
@@ -21,6 +24,24 @@ struct Args {
     #[arg(env = "DANBOORU_APIKEY", long)]
     #[redacted]
     danbooru_apikey: String,
+}
+
+#[derive(Debug, Clone)]
+struct Folders {
+    input: PathBuf,
+    output_sauce: PathBuf,
+    output_nosauce: PathBuf,
+}
+
+impl Folders {
+    fn new<P: AsRef<Path>>(base: P) -> Self {
+        let base = PathBuf::from(base.as_ref());
+        Self {
+            input: base.join("CAG_INPUT"),
+            output_sauce: base.join("CAG_SAUCE"),
+            output_nosauce: base.join("CAG_NOSAUCE"),
+        }
+    }
 }
 
 fn main() -> Result<()> {
@@ -45,6 +66,17 @@ fn main() -> Result<()> {
 
     trace!("Tracing setup");
     trace!(?args);
+
+    let folders = Folders::new(&args.path);
+    debug!(?folders);
+
+    let files: VecDeque<_> = std::fs::read_dir(folders.input)?
+        .into_iter()
+        .flatten()
+        .map(|elem| elem.path())
+        .collect();
+
+    debug!(?files);
 
     Ok(())
 }
