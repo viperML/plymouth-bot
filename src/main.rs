@@ -44,7 +44,8 @@ impl Folders {
     }
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     color_eyre::install()?;
 
     let layer_filter = tracing_subscriber::EnvFilter::from_default_env()
