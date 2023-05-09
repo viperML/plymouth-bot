@@ -1,12 +1,15 @@
 use clap::Parser;
 use color_eyre::{eyre::Context, Result};
+use futures::StreamExt;
 use redacted_debug::RedactedDebug;
-use tokio::task::JoinHandle;
 use std::{
     collections::VecDeque,
     path::{Path, PathBuf},
+    sync::Arc,
+    time::Duration,
 };
-use tracing::{debug, trace, warn};
+use tokio::task::JoinHandle;
+use tracing::{debug, info, trace, warn};
 use tracing_subscriber::prelude::*;
 
 mod handler;
@@ -27,6 +30,10 @@ struct Args {
     #[arg(env = "DANBOORU_APIKEY", long)]
     #[redacted]
     danbooru_apikey: String,
+    /// SauceNao apikey
+    #[redacted]
+    #[arg(env = "SAUCENAO_APIKEY", long)]
+    saucenao_apikey: String,
 }
 
 #[derive(Debug, Clone)]
@@ -66,7 +73,7 @@ async fn main() -> Result<()> {
         .with(layer_fmt)
         .init();
 
-    let args = Args::parse();
+    let args = Arc::new(Args::parse());
 
     trace!("Tracing setup");
     trace!(?args);
@@ -74,18 +81,34 @@ async fn main() -> Result<()> {
     let folders = Folders::new(&args.path);
     debug!(?folders);
 
-    let files: VecDeque<_> = std::fs::read_dir(folders.input)
+    let input_files: VecDeque<_> = std::fs::read_dir(folders.input)
         .context("Reading input folder")?
         .into_iter()
         .flatten()
         .map(|elem| elem.path())
         .collect();
 
-    debug!(?files);
+    debug!(?input_files);
 
-    let x: Vec<_> = files.iter().map(|f| tokio::spawn(async move {
-        handler::tag(f).await;
-    })).collect();
+    // let futs = tokio::stream::
+    let futs = &mut futures::stream::FuturesUnordered::new();
+
+    let saucenao_client = Arc::new(handler::SauceNaoClient::new(&args.saucenao_apikey));
+
+    for f in input_files.iter().take(1) {
+        let args = args.clone();
+        let sc = saucenao_client.clone();
+        let task = async move { handler::tag(f, &args, &sc).await };
+
+        futs.push(task);
+    }
+
+    while let Some(x) = futs.next().await {
+        match x {
+            Ok(req) => info!(?req),
+            Err(report) => warn!(?report),
+        }
+    }
 
     Ok(())
 }
