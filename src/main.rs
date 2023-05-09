@@ -1,12 +1,15 @@
 use clap::Parser;
-use color_eyre::Result;
+use color_eyre::{eyre::Context, Result};
 use redacted_debug::RedactedDebug;
+use tokio::task::JoinHandle;
 use std::{
     collections::VecDeque,
     path::{Path, PathBuf},
 };
-use tracing::{debug, trace};
+use tracing::{debug, trace, warn};
 use tracing_subscriber::prelude::*;
+
+mod handler;
 
 #[derive(RedactedDebug, Clone, Parser)]
 struct Args {
@@ -14,7 +17,7 @@ struct Args {
     #[arg(short = 'n', long)]
     dry: bool,
     /// Base path for images
-    #[arg(short, long, env = "PWD")]
+    #[arg(short, long, default_value = ".")]
     path: PathBuf,
     /// Danbooru username
     #[arg(env = "DANBOORU_USERNAME", long)]
@@ -71,13 +74,18 @@ async fn main() -> Result<()> {
     let folders = Folders::new(&args.path);
     debug!(?folders);
 
-    let files: VecDeque<_> = std::fs::read_dir(folders.input)?
+    let files: VecDeque<_> = std::fs::read_dir(folders.input)
+        .context("Reading input folder")?
         .into_iter()
         .flatten()
         .map(|elem| elem.path())
         .collect();
 
     debug!(?files);
+
+    let x: Vec<_> = files.iter().map(|f| tokio::spawn(async move {
+        handler::tag(f).await;
+    })).collect();
 
     Ok(())
 }
