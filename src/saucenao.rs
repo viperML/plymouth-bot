@@ -8,14 +8,16 @@ use color_eyre::{
 use serde::Deserialize;
 use serde_json::{Number, Value};
 
-use tracing::{trace, warn, error};
+use tracing::{error, trace, warn};
 
 #[derive(redacted_debug::RedactedDebug)]
 pub(crate) struct SauceNaoClient {
+    #[redacted]
     api_key: String,
     client: reqwest::Client,
     long_remaining: u64,
     short_remaining: u64,
+    pub slow: bool,
 }
 
 #[derive(Debug)]
@@ -33,6 +35,7 @@ impl SauceNaoClient {
             client: reqwest::Client::new(),
             long_remaining: 100,
             short_remaining: 4,
+            slow: false,
         }
     }
 
@@ -40,7 +43,7 @@ impl SauceNaoClient {
         &mut self,
         contents: T,
     ) -> Result<Match> {
-        if self.short_remaining == 3 {
+        if (!self.slow && self.short_remaining == 0) || (self.slow && self.short_remaining <= 3) {
             warn!("Short limit reached, sleeping");
             // Short timeout is 30 seconds, so sleep a bit more
             tokio::time::sleep(Duration::from_secs(31)).await;

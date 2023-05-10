@@ -8,13 +8,15 @@ use redacted_debug::RedactedDebug;
 
 use std::{
     path::{Path, PathBuf},
+    rc::Rc,
     sync::Arc,
 };
 use tokio::{select, sync::oneshot::Sender};
 use tracing::{debug, info, trace};
 use tracing_subscriber::prelude::*;
 
-mod handler;
+mod danbooru;
+mod saucenao;
 
 #[derive(RedactedDebug, Clone, Parser)]
 struct Args {
@@ -36,6 +38,9 @@ struct Args {
     #[redacted]
     #[arg(env = "SAUCENAO_APIKEY", long)]
     saucenao_apikey: String,
+    /// Reduce the short_remaining timeout for easier debugging
+    #[arg(short, long)]
+    slow: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -59,7 +64,7 @@ impl Folders {
 #[tokio::main]
 async fn main() -> Result<()> {
     setup()?;
-    let args = Arc::new(Args::parse());
+    let args = Args::parse();
 
     let config_folders = Folders::new(&args.path);
     debug!(?config_folders);
@@ -77,8 +82,14 @@ async fn main() -> Result<()> {
 
     let mut futs = FuturesUnordered::new();
 
+    let danbooru_client = Rc::new(danbooru::DanbooruClient::new(
+        &args.danbooru_username,
+        &args.danbooru_apikey,
+    ));
+
     for file in input_files {
         let tx_sauce = tx_sauce.clone();
+        let danbooru_client = danbooru_client.clone();
         let task = async move {
             let (tx_similarity, rx_sim) = tokio::sync::oneshot::channel();
 
@@ -90,15 +101,18 @@ async fn main() -> Result<()> {
             };
 
             tx_sauce.send(cmd).unwrap();
-            let similarity = rx_sim.await.unwrap();
-            info!(?similarity);
+            let _match = rx_sim.await.unwrap();
+            info!(?_match);
+
+            danbooru_client.fav(_match.danbooru_id).await?;
 
             Ok::<_, Report>(())
         };
         futs.push(task);
     }
 
-    let mut sauce_client = handler::SauceNaoClient::new(&args.saucenao_apikey);
+    let mut sauce_client = saucenao::SauceNaoClient::new(&args.saucenao_apikey);
+    sauce_client.slow = args.slow;
 
     loop {
         select! {
@@ -119,7 +133,7 @@ async fn main() -> Result<()> {
 #[derive(Debug)]
 struct GetSauce {
     file_contents: Vec<u8>,
-    responder: Sender<handler::Match>,
+    responder: Sender<saucenao::Match>,
 }
 
 fn setup() -> Result<()> {
