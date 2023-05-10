@@ -1,14 +1,18 @@
 use clap::Parser;
-use color_eyre::{eyre::Context, Result};
-use futures::StreamExt;
+use color_eyre::{
+    eyre::{bail, Context},
+    Report, Result,
+};
+use futures::{stream::FuturesUnordered, StreamExt};
 use redacted_debug::RedactedDebug;
+use serde_json::Value;
 use std::{
     collections::VecDeque,
     path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
 };
-use tokio::task::JoinHandle;
+use tokio::{select, sync::oneshot::Sender, task::JoinHandle};
 use tracing::{debug, info, trace, warn};
 use tracing_subscriber::prelude::*;
 
@@ -56,6 +60,79 @@ impl Folders {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    setup()?;
+    let args = Arc::new(Args::parse());
+
+    let config_folders = Folders::new(&args.path);
+    debug!(?config_folders);
+
+    let input_files: Vec<_> = std::fs::read_dir(config_folders.input)
+        .context("Reading input folder")?
+        .into_iter()
+        .flatten()
+        .map(|elem| elem.path())
+        .collect();
+
+    debug!(?input_files);
+
+    let (tx_sauce, mut rx_sauce) = tokio::sync::mpsc::unbounded_channel::<GetSauce>();
+
+    let mut futs = FuturesUnordered::new();
+
+    for file in input_files {
+        let tx_sauce = tx_sauce.clone();
+        let task = async move {
+            let (tx_similarity, rx_sim) = tokio::sync::oneshot::channel();
+
+            let file_contents = tokio::fs::read(file).await?;
+
+            let cmd = GetSauce {
+                file_contents,
+                responder: tx_similarity,
+            };
+
+            tx_sauce.send(cmd).unwrap();
+            let similarity = rx_sim.await.unwrap();
+            info!(?similarity);
+
+            Ok::<_, Report>(())
+        };
+        futs.push(task);
+    }
+
+    let sauce_client = handler::SauceNaoClient::new(&args.saucenao_apikey);
+
+    loop {
+        select! {
+            Some(m) = rx_sauce.recv() => {
+                let resp = sauce_client.tag(m.file_contents).await?;
+                let sim = &resp.results[0].header["similarity"];
+                let sim = if let Value::String(s) = sim {
+                    s.parse()?
+                } else {
+                    bail!("Similarity wasn't a string!");
+                };
+
+                trace!(?resp);
+                m.responder.send(sim).unwrap();
+            }
+            n = futs.next() => match n {
+                None => break,
+                Some(_) => {}
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[derive(Debug)]
+struct GetSauce {
+    file_contents: Vec<u8>,
+    responder: Sender<f64>,
+}
+
+fn setup() -> Result<()> {
     color_eyre::install()?;
 
     let layer_filter = tracing_subscriber::EnvFilter::from_default_env()
@@ -73,42 +150,6 @@ async fn main() -> Result<()> {
         .with(layer_fmt)
         .init();
 
-    let args = Arc::new(Args::parse());
-
     trace!("Tracing setup");
-    trace!(?args);
-
-    let folders = Folders::new(&args.path);
-    debug!(?folders);
-
-    let input_files: VecDeque<_> = std::fs::read_dir(folders.input)
-        .context("Reading input folder")?
-        .into_iter()
-        .flatten()
-        .map(|elem| elem.path())
-        .collect();
-
-    debug!(?input_files);
-
-    // let futs = tokio::stream::
-    let futs = &mut futures::stream::FuturesUnordered::new();
-
-    let saucenao_client = Arc::new(handler::SauceNaoClient::new(&args.saucenao_apikey));
-
-    for f in input_files.iter().take(1) {
-        let args = args.clone();
-        let sc = saucenao_client.clone();
-        let task = async move { handler::tag(f, &args, &sc).await };
-
-        futs.push(task);
-    }
-
-    while let Some(x) = futs.next().await {
-        match x {
-            Ok(req) => info!(?req),
-            Err(report) => warn!(?report),
-        }
-    }
-
     Ok(())
 }
