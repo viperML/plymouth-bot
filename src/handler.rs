@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap};
+use std::{borrow::Cow, collections::HashMap, time::Duration};
 
 use color_eyre::{
     eyre::{bail, Context, ContextCompat},
@@ -6,14 +6,16 @@ use color_eyre::{
 };
 
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::{Number, Value};
 
-use tracing::trace;
+use tracing::{trace, warn, error};
 
 #[derive(redacted_debug::RedactedDebug)]
 pub(crate) struct SauceNaoClient {
     api_key: String,
     client: reqwest::Client,
+    long_remaining: u64,
+    short_remaining: u64,
 }
 
 #[derive(Debug)]
@@ -29,14 +31,24 @@ impl SauceNaoClient {
         Self {
             api_key: api_key.to_string(),
             client: reqwest::Client::new(),
+            long_remaining: 100,
+            short_remaining: 4,
         }
     }
 
     pub(crate) async fn tag<T: Into<Cow<'static, [u8]>> + 'static>(
-        &self,
+        &mut self,
         contents: T,
     ) -> Result<Match> {
-        // let contents = contents.as_ref();
+        if self.short_remaining == 3 {
+            warn!("Short limit reached, sleeping");
+            // Short timeout is 30 seconds, so sleep a bit more
+            tokio::time::sleep(Duration::from_secs(31)).await;
+        };
+        if self.long_remaining == 0 {
+            bail!("Long limit reached!");
+        }
+
         let url = reqwest::Url::parse_with_params(
             "https://saucenao.com/search.php",
             &[
@@ -74,6 +86,20 @@ impl SauceNaoClient {
             similarity,
             danbooru_id,
         };
+
+        let short_rem = &parsed.header["short_remaining"];
+        let short_rem = serde_json::from_value::<Number>(short_rem.clone())?
+            .as_u64()
+            .context("FIXME")?;
+        trace!(?short_rem);
+        self.short_remaining = short_rem;
+
+        let long_rem = &parsed.header["long_remaining"];
+        let long_rem = serde_json::from_value::<Number>(long_rem.clone())?
+            .as_u64()
+            .context("FIXME")?;
+        trace!(?long_rem);
+        self.long_remaining = long_rem;
 
         Ok(my_match)
     }

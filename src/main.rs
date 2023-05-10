@@ -98,7 +98,7 @@ async fn main() -> Result<()> {
         futs.push(task);
     }
 
-    let sauce_client = handler::SauceNaoClient::new(&args.saucenao_apikey);
+    let mut sauce_client = handler::SauceNaoClient::new(&args.saucenao_apikey);
 
     loop {
         select! {
