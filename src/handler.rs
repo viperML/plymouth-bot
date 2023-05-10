@@ -1,15 +1,14 @@
-use std::{collections::HashMap, fmt, path::Path, borrow::Cow};
+use std::{borrow::Cow, collections::HashMap, fmt, path::Path};
 
 use color_eyre::{
     eyre::{Context, ContextCompat},
     Result,
 };
 
-
 use serde::Deserialize;
 use serde_json::Value;
 
-use tracing::{trace};
+use tracing::trace;
 
 use crate::GetSauce;
 
@@ -29,7 +28,10 @@ impl SauceNaoClient {
         }
     }
 
-    pub(crate) async fn tag<T: Into<Cow<'static, [u8]>> + 'static>(&self, contents: T) -> Result<SauceNaoResponse> {
+    pub(crate) async fn tag<T: Into<Cow<'static, [u8]>> + 'static>(
+        &self,
+        contents: T,
+    ) -> Result<SauceNaoResponse> {
         // let contents = contents.as_ref();
         let url = reqwest::Url::parse_with_params(
             "https://saucenao.com/search.php",
