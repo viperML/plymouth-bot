@@ -104,24 +104,7 @@ async fn main() -> Result<()> {
         select! {
             Some(msg) = rx_sauce.recv() => {
                 let resp = sauce_client.tag(msg.file_contents).await?;
-
-
-                let sim = &resp.results[0].header["similarity"];
-                let similarity = if let Value::String(s) = sim {
-                    s.parse()?
-                } else {
-                    bail!("Similarity wasn't a string!");
-                };
-
-                let danbooru_id = if let Value::Number(n) = &resp.results[0].data["danbooru_id"] {
-                    n.as_u64().context("FIXME")?
-                } else {
-                    bail!("ID wsn't a number")
-                };
-
-                let my_match = handler::Match { similarity, danbooru_id };
-
-                msg.responder.send(my_match).unwrap();
+                msg.responder.send(resp).unwrap();
             }
             n = futs.next() => match n {
                 None => break,

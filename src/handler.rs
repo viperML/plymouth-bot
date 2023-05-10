@@ -1,7 +1,7 @@
 use std::{borrow::Cow, collections::HashMap, fmt, path::Path};
 
 use color_eyre::{
-    eyre::{Context, ContextCompat},
+    eyre::{bail, Context, ContextCompat},
     Result,
 };
 
@@ -21,7 +21,7 @@ pub(crate) struct SauceNaoClient {
 #[derive(Debug)]
 pub(crate) struct Match {
     pub similarity: f64,
-    pub danbooru_id: u64
+    pub danbooru_id: u64,
 }
 
 impl SauceNaoClient {
@@ -37,7 +37,7 @@ impl SauceNaoClient {
     pub(crate) async fn tag<T: Into<Cow<'static, [u8]>> + 'static>(
         &self,
         contents: T,
-    ) -> Result<SauceNaoResponse> {
+    ) -> Result<Match> {
         // let contents = contents.as_ref();
         let url = reqwest::Url::parse_with_params(
             "https://saucenao.com/search.php",
@@ -59,7 +59,25 @@ impl SauceNaoClient {
         trace!(?raw);
         let parsed: SauceNaoResponse = serde_json::from_value(raw)?;
 
-        Ok(parsed)
+        let sim = &parsed.results[0].header["similarity"];
+        let similarity = if let Value::String(s) = sim {
+            s.parse()?
+        } else {
+            bail!("Similarity wasn't a string!");
+        };
+
+        let danbooru_id = if let Value::Number(n) = &parsed.results[0].data["danbooru_id"] {
+            n.as_u64().context("FIXME")?
+        } else {
+            bail!("ID wsn't a number")
+        };
+
+        let my_match = Match {
+            similarity,
+            danbooru_id,
+        };
+
+        Ok(my_match)
     }
 }
 
@@ -76,23 +94,3 @@ pub struct SauceNaoResult {
     pub data: Value,
     pub header: HashMap<String, Value>,
 }
-
-// pub(crate) async fn similarity<P: AsRef<Path> + fmt::Debug>(
-//     file: P,
-//     tx: tokio::sync::mpsc::UnboundedSender<GetSauce>,
-//     rx: tokio::sync::oneshot::Receiver<f64>,
-//     tx2: tokio::sync::oneshot::Sender<f64>,
-// ) -> Result<f64> {
-//     let file = file.as_ref();
-//     let contents = tokio::fs::read(file).await.context("Reading file")?;
-
-//     let msg = GetSauce {
-//         file_contents: contents,
-//         responder: tx2,
-//     };
-
-//     tx.send(msg)?;
-//     let similarity = rx.await?;
-
-//     Ok(similarity)
-// }
