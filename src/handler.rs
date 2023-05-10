@@ -1,15 +1,15 @@
-use std::{collections::HashMap, fmt, path::Path, time::Duration, borrow::Cow};
+use std::{collections::HashMap, fmt, path::Path, borrow::Cow};
 
 use color_eyre::{
-    eyre::{bail, Context, ContextCompat},
+    eyre::{Context, ContextCompat},
     Result,
 };
-use futures::channel::oneshot::Receiver;
-use reqwest::Request;
+
+
 use serde::Deserialize;
 use serde_json::Value;
-use tokio::time::sleep;
-use tracing::{info, instrument, trace, warn};
+
+use tracing::{trace};
 
 use crate::GetSauce;
 

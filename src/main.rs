@@ -7,13 +7,11 @@ use futures::{stream::FuturesUnordered, StreamExt};
 use redacted_debug::RedactedDebug;
 use serde_json::Value;
 use std::{
-    collections::VecDeque,
     path::{Path, PathBuf},
     sync::Arc,
-    time::Duration,
 };
-use tokio::{select, sync::oneshot::Sender, task::JoinHandle};
-use tracing::{debug, info, trace, warn};
+use tokio::{select, sync::oneshot::Sender};
+use tracing::{debug, info, trace};
 use tracing_subscriber::prelude::*;
 
 mod handler;
