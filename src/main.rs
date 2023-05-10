@@ -1,11 +1,11 @@
 use clap::Parser;
 use color_eyre::{
-    eyre::{bail, Context, ContextCompat},
+    eyre::{Context, ContextCompat},
     Report, Result,
 };
 use futures::{stream::FuturesUnordered, StreamExt};
 use redacted_debug::RedactedDebug;
-use serde_json::Value;
+
 use std::{
     path::{Path, PathBuf},
     sync::Arc,

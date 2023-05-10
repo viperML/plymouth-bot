@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap, fmt, path::Path};
+use std::{borrow::Cow, collections::HashMap};
 
 use color_eyre::{
     eyre::{bail, Context, ContextCompat},
@@ -9,8 +9,6 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use tracing::trace;
-
-use crate::GetSauce;
 
 #[derive(redacted_debug::RedactedDebug)]
 pub(crate) struct SauceNaoClient {
