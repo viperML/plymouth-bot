@@ -18,6 +18,12 @@ pub(crate) struct SauceNaoClient {
     client: reqwest::Client,
 }
 
+#[derive(Debug)]
+pub(crate) struct Match {
+    pub similarity: f64,
+    pub danbooru_id: u64
+}
+
 impl SauceNaoClient {
     pub(crate) fn new<S: AsRef<str>>(api_key: S) -> Self {
         let api_key = api_key.as_ref();
@@ -71,22 +77,22 @@ pub struct SauceNaoResult {
     pub header: HashMap<String, Value>,
 }
 
-pub(crate) async fn similarity<P: AsRef<Path> + fmt::Debug>(
-    file: P,
-    tx: tokio::sync::mpsc::UnboundedSender<GetSauce>,
-    rx: tokio::sync::oneshot::Receiver<f64>,
-    tx2: tokio::sync::oneshot::Sender<f64>,
-) -> Result<f64> {
-    let file = file.as_ref();
-    let contents = tokio::fs::read(file).await.context("Reading file")?;
+// pub(crate) async fn similarity<P: AsRef<Path> + fmt::Debug>(
+//     file: P,
+//     tx: tokio::sync::mpsc::UnboundedSender<GetSauce>,
+//     rx: tokio::sync::oneshot::Receiver<f64>,
+//     tx2: tokio::sync::oneshot::Sender<f64>,
+// ) -> Result<f64> {
+//     let file = file.as_ref();
+//     let contents = tokio::fs::read(file).await.context("Reading file")?;
 
-    let msg = GetSauce {
-        file_contents: contents,
-        responder: tx2,
-    };
+//     let msg = GetSauce {
+//         file_contents: contents,
+//         responder: tx2,
+//     };
 
-    tx.send(msg)?;
-    let similarity = rx.await?;
+//     tx.send(msg)?;
+//     let similarity = rx.await?;
 
-    Ok(similarity)
-}
+//     Ok(similarity)
+// }

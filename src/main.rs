@@ -1,6 +1,6 @@
 use clap::Parser;
 use color_eyre::{
-    eyre::{bail, Context},
+    eyre::{bail, Context, ContextCompat},
     Report, Result,
 };
 use futures::{stream::FuturesUnordered, StreamExt};
@@ -102,17 +102,26 @@ async fn main() -> Result<()> {
 
     loop {
         select! {
-            Some(m) = rx_sauce.recv() => {
-                let resp = sauce_client.tag(m.file_contents).await?;
+            Some(msg) = rx_sauce.recv() => {
+                let resp = sauce_client.tag(msg.file_contents).await?;
+
+
                 let sim = &resp.results[0].header["similarity"];
-                let sim = if let Value::String(s) = sim {
+                let similarity = if let Value::String(s) = sim {
                     s.parse()?
                 } else {
                     bail!("Similarity wasn't a string!");
                 };
 
-                trace!(?resp);
-                m.responder.send(sim).unwrap();
+                let danbooru_id = if let Value::Number(n) = &resp.results[0].data["danbooru_id"] {
+                    n.as_u64().context("FIXME")?
+                } else {
+                    bail!("ID wsn't a number")
+                };
+
+                let my_match = handler::Match { similarity, danbooru_id };
+
+                msg.responder.send(my_match).unwrap();
             }
             n = futs.next() => match n {
                 None => break,
@@ -127,7 +136,7 @@ async fn main() -> Result<()> {
 #[derive(Debug)]
 struct GetSauce {
     file_contents: Vec<u8>,
-    responder: Sender<f64>,
+    responder: Sender<handler::Match>,
 }
 
 fn setup() -> Result<()> {
