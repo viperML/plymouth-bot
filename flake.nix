@@ -34,6 +34,7 @@
               rustfmt
               clippy
               rust-analyzer-unwrapped
+              vault
             ];
             RUST_BACKTRACE = "1";
           };
