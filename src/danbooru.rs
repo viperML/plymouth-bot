@@ -2,6 +2,8 @@ use color_eyre::{eyre::bail, Result};
 
 use tracing::{instrument, trace};
 
+use crate::Folders;
+
 #[derive(redacted_debug::RedactedDebug)]
 pub(crate) struct DanbooruClient<'a> {
     #[redacted]

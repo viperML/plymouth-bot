@@ -8,6 +8,7 @@ use color_eyre::{
 use serde::Deserialize;
 use serde_json::{Number, Value};
 
+use tokio::time::sleep;
 use tracing::{trace, warn};
 
 #[derive(redacted_debug::RedactedDebug)]
@@ -46,7 +47,16 @@ impl SauceNaoClient {
         if (!self.slow && self.short_remaining == 0) || (self.slow && self.short_remaining <= 3) {
             warn!("Short limit reached, sleeping");
             // Short timeout is 30 seconds, so sleep a bit more
-            tokio::time::sleep(Duration::from_secs(31)).await;
+            let timeout = Duration::from_secs(31);
+            let divisions = 100;
+            let step = timeout / divisions;
+
+            let bar = indicatif::ProgressBar::new(divisions.into());
+            for _ in 0..divisions {
+                bar.inc(1);
+                sleep(step).await;
+            }
+            bar.finish();
         };
         if self.long_remaining == 0 {
             bail!("Long limit reached!");

@@ -11,7 +11,7 @@ use std::{
     sync::Arc,
 };
 use tokio::{select, sync::oneshot::Sender};
-use tracing::{debug, info, trace};
+use tracing::{debug, info, trace, warn};
 use tracing_subscriber::prelude::*;
 
 mod danbooru;
@@ -66,10 +66,10 @@ async fn main() -> Result<()> {
     let args = Box::new(Args::parse());
     let args = Box::leak(args);
 
-    let config_folders = Folders::new(&args.path);
+    let config_folders: &'static _ = Box::leak(Box::new(Folders::new(&args.path)));
     debug!(?config_folders);
 
-    let input_files: Vec<_> = std::fs::read_dir(config_folders.input)
+    let input_files: Vec<_> = std::fs::read_dir(&config_folders.input)
         .context("Reading input folder")?
         .into_iter()
         .flatten()
@@ -93,16 +93,15 @@ async fn main() -> Result<()> {
     let danbooru_client =
         danbooru::DanbooruClient::new(&args.danbooru_username, &args.danbooru_apikey);
     let danbooru_client = Arc::new(danbooru_client);
-    // let danbooru_client = Box::leak(Box::new(danbooru_client));
 
-    for file in input_files {
+    for path in input_files {
         let tx_sauce = tx_sauce.clone();
         let danbooru_client = danbooru_client.clone();
 
         let task = async move {
             let (tx_similarity, rx_sim) = tokio::sync::oneshot::channel();
 
-            let file_contents = tokio::fs::read(&file).await?;
+            let file_contents = tokio::fs::read(&path).await?;
 
             let cmd = GetSauce {
                 file_contents,
@@ -110,13 +109,25 @@ async fn main() -> Result<()> {
             };
 
             tx_sauce.send(cmd).unwrap();
-            trace!(?file, "Requested sauce!");
+            trace!(?path, "Requested sauce!");
 
             let _match = rx_sim.await.unwrap();
-            trace!(?file, "Received sauce!");
+            trace!(?path, "Received sauce!");
             info!(?_match);
 
-            danbooru_client.fav(_match.danbooru_id).await?;
+            let new_path = if _match.similarity >= 70.0 {
+                danbooru_client.fav(_match.danbooru_id).await?;
+                config_folders.output_sauce.join(path.file_name().unwrap())
+            } else {
+                warn!("Similarity lower than threshold");
+                config_folders
+                    .output_nosauce
+                    .join(path.file_name().unwrap())
+            };
+
+            trace!(?new_path);
+            tokio::fs::copy(&path, new_path).await?;
+            tokio::fs::remove_file(&path).await?;
 
             Ok::<_, Report>(())
         };
