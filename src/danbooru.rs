@@ -1,5 +1,8 @@
-use color_eyre::{Result, eyre::bail, Report};
-use tracing::{instrument, debug};
+use std::time::Duration;
+
+use color_eyre::{eyre::bail, Report, Result};
+use serde_json::Value;
+use tracing::{debug, instrument, trace};
 
 #[derive(redacted_debug::RedactedDebug)]
 pub(crate) struct DanbooruClient<'a> {
@@ -15,29 +18,35 @@ impl<'a> DanbooruClient<'a> {
         Self {
             username,
             apikey,
-            client: reqwest::Client::new(),
+            client: reqwest::ClientBuilder::new()
+                .user_agent("github.com/viperML/plymouth-bot")
+                .build()
+                .unwrap(),
         }
     }
 }
 
 impl DanbooruClient<'_> {
-    #[instrument(ret, err, level = "debug")]
+    #[instrument(ret, err, level = "debug", skip(self))]
     pub(crate) async fn fav(&self, id: u64) -> Result<()> {
         let url = reqwest::Url::parse_with_params(
             "https://danbooru.donmai.us/favorites",
             &[("post_id", id.to_string())],
         )?;
 
-        let req = self.client
+        let req = self
+            .client
             .post(url)
-            .basic_auth(&self.username, Some(&self.apikey)).build()?;
+            .basic_auth(&self.username, Some(&self.apikey))
+            .header(reqwest::header::CONTENT_TYPE, "application/json");
 
-        debug!(?req);
-        let response = self.client.execute(req).await?;
-        debug!(?response);
+        let response = req.send().await?;
+        let status = response.status();
+        let text = response.text().await?;
+        trace!(?text);
 
-        if !response.status().is_success() {
-            bail!("Bad response: {:?}", response.status());
+        if !status.is_success() {
+            bail!("Bad response: {:?}", status);
         }
 
         Ok(())

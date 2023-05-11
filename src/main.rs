@@ -8,11 +8,12 @@ use redacted_debug::RedactedDebug;
 
 use std::{
     path::{Path, PathBuf},
+    pin::Pin,
     rc::Rc,
     sync::Arc,
 };
 use tokio::{select, sync::oneshot::Sender};
-use tracing::{debug, info, trace};
+use tracing::{debug, info, span, trace, Level};
 use tracing_subscriber::prelude::*;
 
 mod danbooru;
@@ -64,7 +65,8 @@ impl Folders {
 #[tokio::main]
 async fn main() -> Result<()> {
     setup()?;
-    let args = Args::parse();
+    let args = Box::new(Args::parse());
+    let args = Box::leak(args);
 
     let config_folders = Folders::new(&args.path);
     debug!(?config_folders);
@@ -82,18 +84,19 @@ async fn main() -> Result<()> {
 
     let mut futs = FuturesUnordered::new();
 
-    let danbooru_client = Rc::new(danbooru::DanbooruClient::new(
-        &args.danbooru_username,
-        &args.danbooru_apikey,
-    ));
+    let danbooru_client =
+        danbooru::DanbooruClient::new(&args.danbooru_username, &args.danbooru_apikey);
+    let danbooru_client = Arc::new(danbooru_client);
+    // let danbooru_client = Box::leak(Box::new(danbooru_client));
 
     for file in input_files {
         let tx_sauce = tx_sauce.clone();
         let danbooru_client = danbooru_client.clone();
+
         let task = async move {
             let (tx_similarity, rx_sim) = tokio::sync::oneshot::channel();
 
-            let file_contents = tokio::fs::read(file).await?;
+            let file_contents = tokio::fs::read(&file).await?;
 
             let cmd = GetSauce {
                 file_contents,
@@ -101,28 +104,36 @@ async fn main() -> Result<()> {
             };
 
             tx_sauce.send(cmd).unwrap();
+            trace!(?file, "Requested sauce!");
+
             let _match = rx_sim.await.unwrap();
+            trace!(?file, "Received sauce!");
             info!(?_match);
 
             danbooru_client.fav(_match.danbooru_id).await?;
 
             Ok::<_, Report>(())
         };
+
+        let task = tokio::spawn(task);
+
         futs.push(task);
     }
 
     let mut sauce_client = saucenao::SauceNaoClient::new(&args.saucenao_apikey);
     sauce_client.slow = args.slow;
 
+    tokio::pin!(futs);
+
     loop {
         select! {
+            f = &mut futs.next() => match f {
+                None => break,
+                Some(f) => f??
+            },
             Some(msg) = rx_sauce.recv() => {
                 let resp = sauce_client.tag(msg.file_contents).await?;
                 msg.responder.send(resp).unwrap();
-            }
-            n = futs.next() => match n {
-                None => break,
-                Some(_) => {}
             }
         }
     }
