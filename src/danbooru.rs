@@ -1,8 +1,6 @@
-use std::time::Duration;
+use color_eyre::{eyre::bail, Result};
 
-use color_eyre::{eyre::bail, Report, Result};
-use serde_json::Value;
-use tracing::{debug, instrument, trace};
+use tracing::{instrument, trace};
 
 #[derive(redacted_debug::RedactedDebug)]
 pub(crate) struct DanbooruClient<'a> {

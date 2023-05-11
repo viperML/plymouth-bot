@@ -8,7 +8,7 @@ use color_eyre::{
 use serde::Deserialize;
 use serde_json::{Number, Value};
 
-use tracing::{error, trace, warn};
+use tracing::{trace, warn};
 
 #[derive(redacted_debug::RedactedDebug)]
 pub(crate) struct SauceNaoClient {

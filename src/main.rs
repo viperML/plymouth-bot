@@ -8,12 +8,10 @@ use redacted_debug::RedactedDebug;
 
 use std::{
     path::{Path, PathBuf},
-    pin::Pin,
-    rc::Rc,
     sync::Arc,
 };
 use tokio::{select, sync::oneshot::Sender};
-use tracing::{debug, info, span, trace, Level};
+use tracing::{debug, info, trace};
 use tracing_subscriber::prelude::*;
 
 mod danbooru;
@@ -82,7 +80,7 @@ async fn main() -> Result<()> {
 
     let (tx_sauce, mut rx_sauce) = tokio::sync::mpsc::unbounded_channel::<GetSauce>();
 
-    let mut futs = FuturesUnordered::new();
+    let futs = FuturesUnordered::new();
 
     let danbooru_client =
         danbooru::DanbooruClient::new(&args.danbooru_username, &args.danbooru_apikey);
