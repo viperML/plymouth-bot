@@ -111,7 +111,7 @@ async fn main() -> Result<()> {
             tx_sauce.send(cmd).unwrap();
             trace!(?path, "Requested sauce!");
 
-            let _match = rx_sim.await.unwrap();
+            let _match = rx_sim.await?;
             trace!(?path, "Received sauce!");
             info!(?_match);
 
