@@ -74,6 +74,14 @@ async fn main() -> Result<()> {
         .into_iter()
         .flatten()
         .map(|elem| elem.path())
+        .filter(|elem| elem.is_file())
+        .filter(|elem| match elem.extension() {
+            None => false,
+            Some(e) => match e.to_str().unwrap() {
+                "png" | "jpg" | "jpeg" => true,
+                _ => false,
+            },
+        })
         .collect();
 
     debug!(?input_files);
